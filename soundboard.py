@@ -19,6 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 import csv
 import fcntl
+import itertools
 import math
 import optparse
 import os
@@ -37,6 +38,7 @@ except ImportError:
 CONFIG_FILE = 'videos.cfg'
 SOUND_SUFFIXES = ['wav', 'mp3', 'ogg']
 KEYS = string.ascii_lowercase + string.digits + string.ascii_uppercase
+COLORS = '7623514'  # ANSI colors
 CACHE_DIR = 'cache'
 YOUTUBE = 'http://www.youtube.com/watch?v=%s'
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -54,6 +56,7 @@ def read(path):
             video['uri'] = uri = loc if '.' in loc else YOUTUBE % loc
             video['title'] = video['title'].decode('utf-8')
             video['linenum'] = config.line_num
+            video['src'] = path
             # By happy coincidence, quote_plus cannot contain any of quvi's
             # --exec specifiers (%u, %t, %e, and %h.  Instead of %eX it uses
             # %EX.)  Let's hope `HERE` does not contain any as well.
@@ -134,7 +137,7 @@ def play(video):
             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 
-def usage(videos):
+def usage(videos, colors=COLORS):
     """
     ┏━━━┱──────────────┐
     ┃ x ┃ First title  │
@@ -172,17 +175,25 @@ def usage(videos):
         print u"┏━━━┱─" + u"─"*pads[j] + u"─┐",
     print
 
+    colormap = {'': 9}
+    recolor = itertools.cycle(colors).next
+
     # Body
     for i in xrange(rows):
         for j in xrange(cols):
             try:
                 video = out[j * rows + i]
             except IndexError:
-                video = dict(key=' ', title='', loc='')
+                video = dict(key=' ', title='', loc='', src='')
+            path = video['src']
+            if path not in colormap:
+                colormap[path] = recolor()
+            color = colormap[path]
             is_sound = any(video['loc'].endswith('.' + suf)
                            for suf in SOUND_SUFFIXES)
-            print u"┃ %s ┃%s%-*s │" % (
-                    video['key'], ' ~'[is_sound], pads[j], video['title']),
+            print u"┃ \x1b[3%sm%s\x1b[39m ┃%s\x1b[3%sm%-*s\x1b[39m │" % (
+                    color, video['key'], ' ~'[is_sound], color, pads[j],
+                    video['title']),
         print
 
     # Footer
