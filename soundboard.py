@@ -5,6 +5,7 @@ import math
 import optparse
 import os
 import subprocess
+import string
 import struct
 import sys
 import termios
@@ -17,31 +18,55 @@ except ImportError:
 
 CONFIG_FILE = 'videos.cfg'
 SOUND_SUFFIXES = ['wav', 'mp3', 'ogg']
+KEYS = string.ascii_lowercase + string.digits + string.ascii_uppercase
 CACHE_DIR = 'cache'
 YOUTUBE = 'http://www.youtube.com/watch?v=%s'
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def read(path):
-    cfg = {}
     with open(path) as f:
-        reader = csv.DictReader(f,
+        config = csv.DictReader(f,
                  fieldnames='key,loc,title,start,length,format'.split(','))
-        for line in reader:
-            if line['key'].startswith('#'):
+        for video in config:
+            key = video['key']
+            if key.startswith('#') and key != '#':
                 continue
-            if line['key'] in cfg:
-                raise ValueError("duplicate hotkey `%s' in line %d" %
-                        (line['key'], reader.line_num))
-            loc = line['loc']
-            line['uri'] = uri = loc if '.' in loc else YOUTUBE % loc
-            line['title'] = line['title'].decode('utf-8')
+            loc = video['loc']
+            video['uri'] = uri = loc if '.' in loc else YOUTUBE % loc
+            video['title'] = video['title'].decode('utf-8')
+            video['linenum'] = config.line_num
             # By happy coincidence, quote_plus cannot contain any of quvi's
             # --exec specifiers (%u, %t, %e, and %h.  Instead of %eX it uses
             # %EX.)  Let's hope `HERE` does not contain any as well.
-            line['path'] = os.path.join(HERE, CACHE_DIR, quote_plus(uri))
-            cfg[line['key']] = line
-    return cfg
+            video['path'] = os.path.join(HERE, CACHE_DIR, quote_plus(uri))
+            yield video
+
+def read_many(paths, resolve, keys=KEYS):
+    videos = {}
+    conflicts = []
+    keys = list(KEYS)
+
+    for path in paths:
+        for video in read(path):
+            key = video['key']
+            if key in videos:
+                if resolve:
+                    conflicts.append(video)
+                else:
+                    raise ValueError(
+                            "duplicate hotkey `%s' in line %d, file `%s'" %
+                            (key, video['linenum'], path))
+            else:
+                if key in keys:
+                    keys.remove(key)
+                videos[key] = video
+
+    for key, video in zip(keys, conflicts):
+        video['key'] = key
+        videos[key] = video
+
+    return videos
 
 
 def setup(videos):
@@ -89,6 +114,7 @@ def play(video):
         cmd.extend(['-endpos', video['length']])
     subprocess.call(cmd,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
 
 def usage(videos):
     """
@@ -150,13 +176,17 @@ def usage(videos):
 def main(argv):
     parser = optparse.OptionParser()
     parser.add_option('-s', '--setup',
-            action='store_true', dest='setup', default=False,
+            action='store_true', default=False,
             help="download all video files")
+    parser.add_option('-a', '--auto-resolve',
+            action='store_true', default=False,
+            help="automatically resolve keybinding conflicts")
     parser.add_option('-k', '--key',
             help="only play a single video")
     options, args = parser.parse_args(argv)
 
-    videos = read(args[0] if args else os.path.join(HERE, CONFIG_FILE))
+    videos = read_many(args or [os.path.join(HERE, CONFIG_FILE)],
+                       options.auto_resolve)
 
     if options.key:
         play(videos[options.key])
