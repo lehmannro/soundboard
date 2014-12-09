@@ -3,8 +3,10 @@ A soundboard for terminals
 
 The soundboard requires a very simple configuration file with a *hotkey*,
 *URL*, *start position*, *length*, and optionally a *format* delimited by
-commas.  The *URL* has special support for `YouTube <https://www.youtube.com/>`
-links where you only need the identifier, not the full URL.
+commas.  The *URL* has special support for YouTube_ links where you only need
+the identifier, not the full URL.
+
+.. _Youtube: https://www.youtube.com/
 
 Have a look at ``videos.cfg`` or the others in the ``contrib/`` folder for some
 examples.  Once you have a configuration you are happy with, the soundboard
