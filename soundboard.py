@@ -83,6 +83,9 @@ def read_many(paths, resolve, keys=KEYS):
                     keys.remove(key)
                 videos[key] = video
 
+    if len(conflicts) > len(keys):
+        raise ValueError("cannot resolve all key duplicates")
+
     for key, video in zip(keys, conflicts):
         video['key'] = key
         videos[key] = video
