@@ -21,6 +21,7 @@ import csv
 import fcntl
 import itertools
 import math
+import multiprocessing.dummy as multiprocessing
 import optparse
 import os
 import subprocess
@@ -36,6 +37,7 @@ except ImportError:
 
 
 CONFIG_FILE = 'videos.cfg'
+PROCESSES = 4
 SOUND_SUFFIXES = ['wav', 'mp3', 'ogg']
 KEYS = string.ascii_lowercase + string.digits + string.ascii_uppercase
 COLORS = '7623514'  # ANSI colors
@@ -93,23 +95,26 @@ def read_many(paths, resolve, keys=KEYS):
     return videos
 
 
-def setup(videos):
+def download(video):
+    if os.path.exists(video['path']):
+        return
+    cmd = ['quvi', '--feature', '-verify', video['uri'],
+            '--exec', 'wget %%u -O %s' % video['path']]
+    if video['format']:
+        cmd.extend(['--format', video['format']])
+    ret = subprocess.call(cmd)
+    if ret == 0x41:  # QUVI_NOSUPPORT, libquvi does not support the host
+        # Maybe we can just download the bare resource.
+        subprocess.call(['wget', video['uri'], '-O', video['path']])
+
+def setup(videos, nprocs=PROCESSES):
     try:
         os.makedirs(os.path.join(HERE, CACHE_DIR))
     except OSError:
         pass
 
-    for video in videos.values():
-        if os.path.exists(video['path']):
-            continue
-        cmd = ['quvi', '--feature', '-verify', video['uri'],
-               '--exec', 'wget %%u -O %s' % video['path']]
-        if video['format']:
-            cmd.extend(['--format', video['format']])
-        ret = subprocess.call(cmd)
-        if ret == 0x41:  # QUVI_NOSUPPORT, libquvi does not support the host
-            # Maybe we can just download the bare resource.
-            subprocess.call(['wget', video['uri'], '-O', video['path']])
+    pool = multiprocessing.Pool(nprocs)
+    pool.map(download, videos.values(), chunksize=1)
 
 
 def loop(videos):
