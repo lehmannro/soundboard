@@ -215,15 +215,15 @@ def main(argv):
     parser.add_option('-s', '--setup',
             action='store_true', default=False,
             help="download all video files")
-    parser.add_option('-a', '--auto-resolve',
+    parser.add_option('-n', '--no-resolve',
             action='store_true', default=False,
-            help="automatically resolve keybinding conflicts")
+            help="do not automatically resolve keybinding conflicts")
     parser.add_option('-k', '--key',
             help="only play a single video")
     options, args = parser.parse_args(argv)
 
     videos = read_many(args or [os.path.join(HERE, CONFIG_FILE)],
-                       options.auto_resolve)
+                       not options.no_resolve)
 
     if options.key:
         play(videos[options.key])

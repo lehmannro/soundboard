@@ -21,8 +21,14 @@ soundboard::
   python soundboard.py my_videos.cfg
 
 In this interactive terminal application, you have to press any one *hotkey*
-and the corresponding video will start.  The following programs will be run as
-external processes, so you need to have them available on your system:
+and the corresponding video will start.  It can happen that some videos get
+assigned a different hotkey than the one you defined:  If two entries share the
+same hotkey, the later one will be automatically reassigned another free
+hotkey.  If you want to disable that behaviour, supply ``--no-resolve`` to the
+application.
+
+The following programs will be run as external processes, so you need to have
+them available on your system:
 
 :Dependencies:
   - `mplayer <https://mplayerhq.hu>`_
