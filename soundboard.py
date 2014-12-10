@@ -98,8 +98,8 @@ def read_many(paths, resolve, keys=KEYS):
 def download(video):
     if os.path.exists(video['path']):
         return
-    cmd = ['quvi', '--feature', '-verify', video['uri'],
-            '--exec', 'wget %%u -O %s' % video['path']]
+    cmd = ['quvi', '--verbosity', 'mute', '--feature', '-verify', video['uri'],
+            '--exec', 'wget --progress=dot %%u -O %s' % video['path']]
     if video['format']:
         cmd.extend(['--format', video['format']])
     ret = subprocess.call(cmd)
