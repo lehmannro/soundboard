@@ -136,7 +136,7 @@ def loop(videos):
 
 
 def play(video):
-    cmd = ['mplayer', '-fs', '-af', 'volnorm=2:0.75', video['path']]
+    cmd = ['mplayer', '-fs', '-af', 'volnorm=2:0.75', '-ao', 'alsa', video['path']]
     if video['start']:
         cmd.extend(['-ss', video['start']])
     if video['length']:
