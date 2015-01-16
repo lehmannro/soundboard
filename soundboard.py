@@ -19,7 +19,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 import csv
 import fcntl
+import itertools
 import math
+import multiprocessing.dummy as multiprocessing
 import optparse
 import os
 import subprocess
@@ -35,14 +37,18 @@ except ImportError:
 
 
 CONFIG_FILE = 'videos.cfg'
+PROCESSES = 4
 SOUND_SUFFIXES = ['wav', 'mp3', 'ogg']
 KEYS = string.ascii_lowercase + string.digits + string.ascii_uppercase
+COLORS = '9623514'  # ANSI colors
 CACHE_DIR = 'cache'
 YOUTUBE = 'http://www.youtube.com/watch?v=%s'
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def read(path):
+    if not os.path.isabs(path):
+        path = os.path.join(HERE, path)
     with open(path) as f:
         config = csv.DictReader(f,
                  fieldnames='key,loc,title,start,length,format'.split(','))
@@ -54,6 +60,7 @@ def read(path):
             video['uri'] = uri = loc if '.' in loc else YOUTUBE % loc
             video['title'] = video['title'].decode('utf-8')
             video['linenum'] = config.line_num
+            video['src'] = path
             # By happy coincidence, quote_plus cannot contain any of quvi's
             # --exec specifiers (%u, %t, %e, and %h.  Instead of %eX it uses
             # %EX.)  Let's hope `HERE` does not contain any as well.
@@ -80,6 +87,9 @@ def read_many(paths, resolve, keys=KEYS):
                     keys.remove(key)
                 videos[key] = video
 
+    if len(conflicts) > len(keys):
+        raise ValueError("cannot resolve all key duplicates")
+
     for key, video in zip(keys, conflicts):
         video['key'] = key
         videos[key] = video
@@ -87,23 +97,26 @@ def read_many(paths, resolve, keys=KEYS):
     return videos
 
 
-def setup(videos):
+def download(video):
+    if os.path.exists(video['path']):
+        return
+    cmd = ['quvi', '--verbosity', 'mute', '--feature', '-verify', video['uri'],
+            '--exec', 'wget --progress=dot %%u -O %s' % video['path']]
+    if video['format']:
+        cmd.extend(['--format', video['format']])
+    ret = subprocess.call(cmd)
+    if ret == 0x41:  # QUVI_NOSUPPORT, libquvi does not support the host
+        # Maybe we can just download the bare resource.
+        subprocess.call(['wget', video['uri'], '-O', video['path']])
+
+def setup(videos, nprocs=PROCESSES):
     try:
         os.makedirs(os.path.join(HERE, CACHE_DIR))
     except OSError:
         pass
 
-    for video in videos.values():
-        if os.path.exists(video['path']):
-            continue
-        cmd = ['quvi', '--feature', '-verify', video['uri'],
-               '--exec', 'wget %%u -O %s' % video['path']]
-        if video['format']:
-            cmd.extend(['--format', video['format']])
-        ret = subprocess.call(cmd)
-        if ret == 0x41:  # QUVI_NOSUPPORT, libquvi does not support the host
-            # Maybe we can just download the bare resource.
-            subprocess.call(['wget', video['uri'], '-O', video['path']])
+    pool = multiprocessing.Pool(nprocs)
+    pool.map(download, videos.values(), chunksize=1)
 
 
 def loop(videos):
@@ -125,7 +138,7 @@ def loop(videos):
 
 
 def play(video):
-    cmd = ['mplayer', '-fs', '-af', 'volnorm=2:0.75', video['path']]
+    cmd = ['mplayer', '-fs', '-af', 'volnorm=2:0.75', '-ao', 'alsa', video['path']]
     if video['start']:
         cmd.extend(['-ss', video['start']])
     if video['length']:
@@ -134,7 +147,7 @@ def play(video):
             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 
-def usage(videos):
+def usage(videos, colors=COLORS):
     """
     ┏━━━┱──────────────┐
     ┃ x ┃ First title  │
@@ -147,7 +160,7 @@ def usage(videos):
 
     # Sort by title length so subsequent columns are guaranteed to have the
     # longest item at their very top.
-    out = videos.values()
+    out = [video for video in videos.values() if os.path.exists(video['path'])]
     out.sort(key=lambda v: len(v['title']), reverse=True)
     total = len(out)
 
@@ -172,17 +185,25 @@ def usage(videos):
         print u"┏━━━┱─" + u"─"*pads[j] + u"─┐",
     print
 
+    colormap = {'': 9}
+    recolor = itertools.cycle(colors).next
+
     # Body
     for i in xrange(rows):
         for j in xrange(cols):
             try:
                 video = out[j * rows + i]
             except IndexError:
-                video = dict(key=' ', title='', loc='')
+                video = dict(key=' ', title='', loc='', src='')
+            path = video['src']
+            if path not in colormap:
+                colormap[path] = recolor()
+            color = colormap[path]
             is_sound = any(video['loc'].endswith('.' + suf)
                            for suf in SOUND_SUFFIXES)
-            print u"┃ %s ┃%s%-*s │" % (
-                    video['key'], ' ~'[is_sound], pads[j], video['title']),
+            print u"┃ \x1b[3%sm%s\x1b[39m ┃%s\x1b[3%sm%-*s\x1b[39m │" % (
+                    color, video['key'], ' ~'[is_sound], color, pads[j],
+                    video['title']),
         print
 
     # Footer
@@ -196,15 +217,15 @@ def main(argv):
     parser.add_option('-s', '--setup',
             action='store_true', default=False,
             help="download all video files")
-    parser.add_option('-a', '--auto-resolve',
+    parser.add_option('-n', '--no-resolve',
             action='store_true', default=False,
-            help="automatically resolve keybinding conflicts")
+            help="do not automatically resolve keybinding conflicts")
     parser.add_option('-k', '--key',
             help="only play a single video")
     options, args = parser.parse_args(argv)
 
     videos = read_many(args or [os.path.join(HERE, CONFIG_FILE)],
-                       options.auto_resolve)
+                       not options.no_resolve)
 
     if options.key:
         play(videos[options.key])
