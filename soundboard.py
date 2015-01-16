@@ -160,7 +160,7 @@ def usage(videos, colors=COLORS):
 
     # Sort by title length so subsequent columns are guaranteed to have the
     # longest item at their very top.
-    out = videos.values()
+    out = [video for video in videos.values() if os.path.exists(video['path'])]
     out.sort(key=lambda v: len(v['title']), reverse=True)
     total = len(out)
 
