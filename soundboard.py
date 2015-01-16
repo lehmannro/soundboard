@@ -47,6 +47,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def read(path):
+    if not os.path.isabs(path):
+        path = os.path.join(HERE, path)
     with open(path) as f:
         config = csv.DictReader(f,
                  fieldnames='key,loc,title,start,length,format'.split(','))
