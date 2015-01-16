@@ -40,7 +40,7 @@ CONFIG_FILE = 'videos.cfg'
 PROCESSES = 4
 SOUND_SUFFIXES = ['wav', 'mp3', 'ogg']
 KEYS = string.ascii_lowercase + string.digits + string.ascii_uppercase
-COLORS = '7623514'  # ANSI colors
+COLORS = '9623514'  # ANSI colors
 CACHE_DIR = 'cache'
 YOUTUBE = 'http://www.youtube.com/watch?v=%s'
 HERE = os.path.dirname(os.path.abspath(__file__))
